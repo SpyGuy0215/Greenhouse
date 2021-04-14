@@ -7,4 +7,4 @@
 
 #### Commands:
 - `/water` : Test water by calling `pumpWater()`
-- `sendData` : Sends data by calling `readSensors()` and `writeData()`
+- `/sendData` : Sends data by calling `readSensors()` and `writeData()`
