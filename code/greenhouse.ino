@@ -1,5 +1,5 @@
 /*
-   This is AutoGreen! Have fun using it!
+   This is AutoGrow! Have fun using it!
    Author: SpyGuy
 
    TODO: Add Failsafes (v2.0)
@@ -8,6 +8,14 @@
    TODO: Make React Native App (v2.0)
 
    Upload Password: 123456
+
+   Events at:
+   8:00 PM
+   6:30 AM
+   7:00 AM
+   Every 10 minutes (XX:10, XX:20, XX:30, XX:40, XX:50, XX:00)
+   Every 30 minutes (XX:30, XX:00)
+   Update time every 5 minutes
 */
 
 #include <ArduinoJson.h>
@@ -54,13 +62,14 @@ int motorPin2 = 5;
 
 unsigned long lastConnectionTime = 0;
 const unsigned long postingInterval = 600000; //10 Minutes
+int lastPosted = 9999; 
 
 WiFiClient client;
 RTCZero rtc;
 
 void setup() {
   rtc.begin();
-  Serial.begin(9600); 
+  Serial.begin(115200); 
 
   //Set Pinmodes
   WiFiDrv::pinMode(RGB_RED, OUTPUT);  //GREEN
@@ -86,13 +95,15 @@ void setup() {
 
   ArduinoOTA.begin(WiFi.localIP(), "Arduino MKR WiFi 1010", "123456", InternalStorage); //Starts OTA update
   rtc.setEpoch(WiFi.getTime() - 14400); //Converted Unix Timestamp (in GMT) to EST Time by subtracting 4 hours (14400)
+  Serial.print("Time: ");
+  Serial.println(WiFi.getTime()); 
   lightInit();
   alarmInit(); //Initialize the alarms to pump the water
   readSensors(); 
   writeData(); 
 
   Serial.println("WDT Enabled"); 
-  Watchdog.enable(5000); 
+  Watchdog.enable(10000); 
   
 }
 
@@ -101,10 +112,15 @@ void loop() {
   Watchdog.reset(); 
   ArduinoOTA.poll();
 
-  if (millis()  - lastConnectionTime > postingInterval) {
-    Serial.println("Post"); 
+  if (rtc.getMinutes() % 10 == 0 and (rtc.getMinutes() > lastPosted + 5 or lastPosted == 9999)) {
+    Serial.println("Post"); //Post every 10 minutes
     readSensors();
     writeData();
+    lastPosted = rtc.getMinutes(); 
+  }
+  
+  if(rtc.getMinutes() % 5 == 0) {
+    rtc.setEpoch(WiFi.getTime() - 14400); 
   }
 
   if (status != WL_CONNECTED) {
@@ -115,32 +131,31 @@ void loop() {
     WiFiDrv::analogWrite(RGB_GREEN, 20);
   }
 
-  if (millis() % 3600000 == 0) {
-    Serial.println("Umbruh"); 
+  if (rtc.getMinutes() == 0) {
+    Serial.println("Water");  //Read water level every hour
     waterLevelRead();
   }
 
-  if (rtc.getHours() == 20 and lightOn == false) {
-    Serial.println("DB2"); 
+  if ((rtc.getHours() >= 20 or rtc.getHours() < 7) and lightOn == false) {
+    Serial.println("DB2"); //Turn on lights at 8:00 PM
     turnOnLights();
     readSensors(); 
     writeData(); 
   }
 
-  if (rtc.getHours() == 7 and lightOn == true) {
-    Serial.println("DB1"); 
+  if ((rtc.getHours() >= 7 and rtc.getHours() < 20) and lightOn == true) {
+    Serial.println("DB1"); //Turn off lights at 7:00 AM
     turnOffLights();
     readSensors(); 
     writeData(); 
   }
 
-  if(rtc.getHours() == 18 and rtc.getMinutes() == 6 and waterOn == false) {
-    Serial.println("Water"); 
+  if(rtc.getHours() == 6 and rtc.getMinutes() == 30 and waterOn == false) {
+    Serial.println("Water");  //Pump water at 6:30 AM
     pumpWater(); 
   }
 
+  readCommands(); //Read Serial commands (Delete if remote)
 
-  readCommands();
-  testPoll(); 
 
 }
